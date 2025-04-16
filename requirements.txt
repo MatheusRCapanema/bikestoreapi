@@ -1,0 +1,7 @@
+pip
+autopep8
+Flask==3.0.3
+gunicorn==22.0.0
+SQLAlchemy==1.4.46
+passlib==1.7.4
+Werkzeug==3.0.6
