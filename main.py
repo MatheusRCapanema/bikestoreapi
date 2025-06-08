@@ -281,6 +281,45 @@ def login_loja():
     
     return jsonify(mensagem="Login de loja realizado com sucesso", loja_id=loja_db.id)
 
+@app.route("/loja/<int:loja_id>", methods=["GET"])
+def obter_detalhes_loja(loja_id):
+    """
+    Retorna as informações de uma loja específica.
+    ---
+    tags:
+      - Loja
+    parameters:
+      - name: loja_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Detalhes da loja
+        schema:
+          type: object
+          properties:
+            id: { type: integer }
+            nome_loja: { type: string }
+            cnpj: { type: string }
+            cep: { type: string }
+            endereco: { type: string }
+            complemento: { type: string }
+            lote: { type: string }
+            latitude: { type: number }
+            longitude: { type: number }
+      404:
+        description: Loja não encontrada
+    """
+    db: Session = next(get_db())
+    loja = db.query(Loja).filter(Loja.id == loja_id).first()
+    if not loja:
+        return jsonify(detail="Loja não encontrada."), 404
+    return jsonify(
+        id=loja.id, nome_loja=loja.nome_loja, cnpj=loja.cnpj, cep=loja.cep, endereco=loja.endereco, complemento=loja.complemento, lote=loja.lote, latitude=loja.latitude, longitude=loja.longitude,
+        foto_path = loja.foto_path, descricao = loja.descricao
+    )
+
 
 # -------------------------------------------
 #  PRODUTOS (Exemplo que mantém form-data para upload de imagem)
@@ -369,6 +408,44 @@ def cadastrar_produto_com_imagem(loja_id):
         image_path=novo_produto.image_path
     )
 
+@app.route("/loja/<int:loja_id>/produtos", methods=["GET"])
+def listar_produtos_loja(loja_id):
+    """
+    Retorna todos os produtos de uma loja específica.
+    ---
+    tags:
+      - Produtos
+    parameters:
+      - name: loja_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Lista de produtos da loja
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              nome_produto: { type: string }
+              preco: { type: number }
+              image_path: { type: string }
+      404:
+        description: Loja não encontrada
+    """
+    db: Session = next(get_db())
+    loja = db.query(Loja).filter(Loja.id == loja_id).first()
+    if not loja:
+        return jsonify(detail="Loja não encontrada."), 404
+    produtos = db.query(Produto).filter(Produto.loja_id == loja_id).all()
+    return jsonify([
+    {"id": p.id, "nome_produto": p.nome_produto, "preco": p.preco, "image_path": p.image_path, "quantidade_estoque": p.quantidade_estoque}
+    for p in produtos
+])
+
+
 @app.route("/loja/<int:loja_id>/produto/<int:produto_id>", methods=["DELETE"])
 def remover_produto(loja_id, produto_id):
     """
@@ -393,6 +470,8 @@ def remover_produto(loja_id, produto_id):
     """
     db: Session = next(get_db())
     produto = db.query(Produto).filter(
+
+ # Check if the product exists and belongs to the specified store
         Produto.id == produto_id,
         Produto.loja_id == loja_id
     ).first()
@@ -402,6 +481,12 @@ def remover_produto(loja_id, produto_id):
 
     db.delete(produto)
     db.commit()
+
+ # Delete the associated image file
+    if produto.image_path and os.path.exists(produto.image_path):
+        os.remove(produto.image_path)
+
+
     return jsonify(mensagem="Produto removido com sucesso.")
 
 
@@ -503,6 +588,43 @@ def cancelar_expiradas(loja_id):
 #  SERVIÇOS
 # -------------------------------------------
 
+@app.route("/loja/<int:loja_id>/servicos", methods=["GET"])
+def listar_servicos_loja(loja_id):
+    """
+    Retorna todos os serviços de uma loja específica.
+    ---
+    tags:
+      - Serviços
+    parameters:
+      - name: loja_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Lista de serviços da loja
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              nome_servico: { type: string }
+              preco: { type: number }
+              descricao: { type: string}
+      404:
+        description: Loja não encontrada
+    """
+    db: Session = next(get_db())
+    loja = db.query(Loja).filter(Loja.id == loja_id).first()
+    if not loja:
+        return jsonify(detail="Loja não encontrada."), 404
+    
+    servicos = db.query(Servico).filter(Servico.loja_id == loja_id).all()
+    return jsonify(servicos=[{
+        "id": s.id, "nome_servico": s.nome_servico, "preco": s.preco, "descricao": s.descricao
+        } for s in servicos])
+
 @app.route("/loja/<int:loja_id>/servico", methods=["POST"])
 def cadastrar_servico(loja_id):
     """
@@ -564,8 +686,24 @@ def cadastrar_servico(loja_id):
 
 @app.route("/loja/<int:loja_id>/servico/<int:servico_id>", methods=["DELETE"])
 def remover_servico(loja_id, servico_id):
+    db: Session = next(get_db())
+    servico = (
+        db.query(Servico)
+          .filter(Servico.id == servico_id, Servico.loja_id == loja_id)
+          .first()
+    )
+    if not servico:
+        return jsonify(detail="Serviço não encontrado ou não pertence à loja informada."), 404
+
+    # Só isso já é suficiente:
+    db.delete(servico)
+    db.commit()
+    return jsonify(mensagem="Serviço removido com sucesso."), 200
+
+@app.route("/loja/<int:loja_id>/servico/<int:servico_id>/horarios", methods=["GET"])
+def listar_horarios_servico(loja_id, servico_id):
     """
-    Remove um serviço de determinada loja.
+    Lista os horários disponíveis para um serviço específico em uma loja.
     ---
     tags:
       - Serviços
@@ -580,22 +718,25 @@ def remover_servico(loja_id, servico_id):
         required: true
     responses:
       200:
-        description: Serviço removido com sucesso
+        description: Retorna lista de horários do serviço
       404:
-        description: Serviço não encontrado ou não pertence à loja
+        description: Serviço não encontrado para a loja
     """
     db: Session = next(get_db())
     servico = db.query(Servico).filter(
         Servico.id == servico_id,
         Servico.loja_id == loja_id
     ).first()
-
     if not servico:
-        return jsonify(detail="Serviço não encontrado ou não pertence à loja informada."), 404
+        return jsonify(detail="Serviço não encontrado para esta loja."), 404
 
-    db.delete(servico)
-    db.commit()
-    return jsonify(mensagem="Serviço removido com sucesso.")
+    horarios = db.query(ServicoHorario).filter(
+        ServicoHorario.servico_id == servico_id
+    ).all()
+
+    return jsonify(horarios_servico=[{
+        "id": h.id, "horario": h.horario, "is_disponivel": h.is_disponivel
+    } for h in horarios])
 
 @app.route("/loja/<int:loja_id>/servico/<int:servico_id>/horarios", methods=["POST"])
 def criar_horarios_servico(loja_id, servico_id):

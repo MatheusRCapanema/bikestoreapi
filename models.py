@@ -96,17 +96,27 @@ class Servico(Base):
 
     loja = relationship("Loja", back_populates="servicos")
 
+    horarios = relationship(
+        "ServicoHorario",
+        back_populates="servico",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+
 
 class ServicoHorario(Base):
     __tablename__ = "servicos_horarios"
 
     id = Column(Integer, primary_key=True, index=True)
-    servico_id = Column(Integer, ForeignKey("servicos.id"), nullable=False)
+    servico_id = Column(
+        Integer,
+        ForeignKey("servicos.id", ondelete="CASCADE"),
+        nullable=False
+    )
     horario = Column(DateTime, nullable=False)
     is_disponivel = Column(Boolean, default=True)
 
-    servico = relationship("Servico", backref="horarios_disponiveis")
-
+    servico = relationship("Servico", back_populates="horarios")
 
 class ReservaServico(Base):
     __tablename__ = "reservas_servicos"
